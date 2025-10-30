@@ -1,12 +1,13 @@
 import os
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import yaml
 from sklearn.metrics import accuracy_score, f1_score, classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split
 from datasets import Dataset, DatasetDict
 from transformers import (AutoConfig, AutoModelForSequenceClassification, AutoTokenizer,
                           Trainer, TrainingArguments, DataCollatorWithPadding)
@@ -70,44 +71,46 @@ def ensure_dirs(cfg: Config):
         os.makedirs(d, exist_ok=True)
 
 
-def load_dataset(cfg: Config) -> DatasetDict:
+def load_dataset(cfg: Config) -> Tuple[DatasetDict, Dict[str, int]]:
     if cfg.train_path and cfg.val_path:
-        train_df = pd.read_csv(cfg.train_path)
-        val_df = pd.read_csv(cfg.val_path)
+        train_df = pd.read_csv(cfg.train_path, encoding="utf-8")
+        val_df = pd.read_csv(cfg.val_path, encoding="utf-8")
     elif cfg.dataset_path:
-        df = pd.read_csv(cfg.dataset_path)
+        df = pd.read_csv(cfg.dataset_path, encoding="utf-8")
         df = df[[cfg.text_column, cfg.label_column]].dropna()
-        if cfg.training.get("shuffle_before_split", True):
+        # Normalize labels early to allow stratified split on canonical labels
+        if cfg.label_mapping:
+            def map_label(x: str) -> str:
+                return cfg.label_mapping.get(str(x).strip().lower(), str(x).strip().lower())
+            df[cfg.label_column] = df[cfg.label_column].apply(map_label)
+        # Optional shuffle before stratified split
+        if cfg.shuffle_before_split:
             df = df.sample(frac=1.0, random_state=cfg.seed).reset_index(drop=True)
-        val_size = cfg.training.get("val_size", 0.1)
-        n_val = max(1, int(len(df) * float(val_size)))
-        val_df = df.iloc[:n_val]
-        train_df = df.iloc[n_val:]
+        # Stratified split to preserve label distribution
+        train_df, val_df = train_test_split(
+            df,
+            test_size=cfg.val_size,
+            random_state=cfg.seed,
+            stratify=df[cfg.label_column]
+        )
     else:
         raise ValueError("Please provide dataset.path or (train_path and val_path) in config.yaml")
 
-    # Normalize labels if mapping provided
-    if cfg.label_mapping:
-        def map_label(x: str) -> str:
-            return cfg.label_mapping.get(str(x).strip().lower(), str(x).strip().lower())
-        train_df[cfg.label_column] = train_df[cfg.label_column].apply(map_label)
-        val_df[cfg.label_column] = val_df[cfg.label_column].apply(map_label)
-
     # Filter to allowed labels
     allowed = set([l.lower() for l in cfg.labels])
-    train_df = train_df[train_df[cfg.label_column].str.lower().isin(allowed)]
-    val_df = val_df[val_df[cfg.label_column].str.lower().isin(allowed)]
+    train_df = train_df[train_df[cfg.label_column].str.lower().isin(allowed)].copy()
+    val_df = val_df[val_df[cfg.label_column].str.lower().isin(allowed)].copy()
 
     # Create label2id
     labels_sorted = [l for l in cfg.labels]
     label2id = {l: i for i, l in enumerate(labels_sorted)}
 
-    # Map to ids
-    train_df["label_id"] = train_df[cfg.label_column].str.lower().map(label2id)
-    val_df["label_id"] = val_df[cfg.label_column].str.lower().map(label2id)
+    # Map to ids into 'labels' column expected by HF Trainer
+    train_df["labels"] = train_df[cfg.label_column].str.lower().map(label2id)
+    val_df["labels"] = val_df[cfg.label_column].str.lower().map(label2id)
 
-    train_ds = Dataset.from_pandas(train_df[[cfg.text_column, "label_id"]], preserve_index=False)
-    val_ds = Dataset.from_pandas(val_df[[cfg.text_column, "label_id"]], preserve_index=False)
+    train_ds = Dataset.from_pandas(train_df[[cfg.text_column, "labels"]], preserve_index=False)
+    val_ds = Dataset.from_pandas(val_df[[cfg.text_column, "labels"]], preserve_index=False)
 
     return DatasetDict({"train": train_ds, "validation": val_ds}), label2id
 
@@ -118,7 +121,11 @@ def tokenize_function(examples, tokenizer: AutoTokenizer, text_column: str, max_
 
 def compute_metrics_builder():
     def compute_metrics(eval_pred):
-        logits, labels = eval_pred
+        # Support both tuple (predictions, labels) and EvalPrediction object
+        if isinstance(eval_pred, tuple) or isinstance(eval_pred, list):
+            logits, labels = eval_pred
+        else:
+            logits, labels = getattr(eval_pred, 'predictions', None), getattr(eval_pred, 'label_ids', None)
         preds = np.argmax(logits, axis=-1)
         acc = accuracy_score(labels, preds)
         f1_macro = f1_score(labels, preds, average="macro")

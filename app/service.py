@@ -28,6 +28,8 @@ class EmotionModel:
         self.model_dir = model_dir
         self.tokenizer = AutoTokenizer.from_pretrained(model_dir)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
         self.model.eval()
         self.labels = load_labels_from_config(model_dir)
         if not self.labels:
@@ -45,6 +47,8 @@ class EmotionModel:
             top_k = 1
         top_k = min(top_k, len(self.labels))
         enc = self.tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
+        # move to device
+        enc = {k: v.to(self.device) for k, v in enc.items()}
         outputs = self.model(**enc)
         logits = outputs.logits
         probs = torch.softmax(logits, dim=-1)

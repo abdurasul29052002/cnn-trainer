@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 class PredictRequest(BaseModel):
     texts: List[str] = Field(..., description="List of input texts to analyze")
-    top_k: int = Field(1, ge=1, le=6, description="Number of top emotions to return per text")
+    top_k: int = Field(1, ge=1, description="Number of top emotions to return per text (will be capped by number of labels)")
 
 
 class EmotionScore(BaseModel):

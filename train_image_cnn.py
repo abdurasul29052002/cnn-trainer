@@ -13,6 +13,12 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report, con
 import pandas as pd
 import yaml
 
+# Optional nice progress bar
+try:
+    from tqdm import tqdm  # type: ignore
+except Exception:  # pragma: no cover - fallback if tqdm not present
+    tqdm = None
+
 
 @dataclass
 class ImageConfig:
@@ -253,10 +259,24 @@ def main():
     best_f1 = -1.0
     best_state = None
 
+    # Prepare metrics CSV log
+    os.makedirs(cfg.logs_dir, exist_ok=True)
+    metrics_csv = os.path.join(cfg.logs_dir, "metrics_image.csv")
+    if not os.path.exists(metrics_csv):
+        with open(metrics_csv, "w", encoding="utf-8") as f:
+            f.write("epoch,train_loss,val_acc,val_f1,lr\n")
+
     for epoch in range(1, cfg.epochs + 1):
         model.train()
         running_loss = 0.0
-        for images, labels in train_loader:
+        num_samples = 0
+
+        iterable = train_loader
+        use_tqdm = tqdm is not None
+        if use_tqdm:
+            iterable = tqdm(train_loader, desc=f"Epoch {epoch}/{cfg.epochs}", leave=False)
+
+        for images, labels in iterable:
             images = images.to(cfg.device)
             labels = labels.to(cfg.device)
 
@@ -266,13 +286,25 @@ def main():
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item() * images.size(0)
+            batch_size = images.size(0)
+            running_loss += loss.item() * batch_size
+            num_samples += batch_size
+
+            if use_tqdm:
+                current_lr = optimizer.param_groups[0]['lr']
+                iterable.set_postfix({"loss": f"{loss.item():.4f}", "lr": f"{current_lr:.2e}"})
 
         scheduler.step()
 
-        train_loss = running_loss / len(train_loader.dataset)
+        train_loss = running_loss / max(1, num_samples)
         val_acc, val_f1, y_true, y_pred = evaluate(model, val_loader, cfg.device)
 
+        # Write metrics to CSV
+        current_lr = optimizer.param_groups[0]['lr']
+        with open(metrics_csv, "a", encoding="utf-8") as f:
+            f.write(f"{epoch},{train_loss:.6f},{val_acc:.6f},{val_f1:.6f},{current_lr:.6e}\n")
+
+        # Console summary
         print(f"Epoch {epoch}/{cfg.epochs} - TrainLoss: {train_loss:.4f} - ValAcc: {val_acc:.4f} - ValF1: {val_f1:.4f}")
 
         if val_f1 > best_f1:

@@ -1,62 +1,12 @@
-# Project configuration for emotion detection (6-class)
+# Project configuration for CNN-based emotion detection from images
 
 project:
   seed: 42
-  output_dir: models\emotion-distilbert
+  output_dir: models\emotion-cnn
   logs_dir: outputs\logs
   reports_dir: outputs\reports
 
-# Dataset configuration (TEXT)
-# If you have separate train/val CSV files, you can set dataset.train_path and dataset.val_path
-# Otherwise set dataset.path and split will be created automatically
-# Columns are configurable to match your Kaggle dataset
-
-dataset:
-  # EITHER provide a single CSV path
-  path: data\dataset.csv  # e.g., data\emotions.csv
-  # OR provide explicit train/val paths (uncomment if you have separate files)
-  # train_path: data\train.csv
-  # val_path: data\val.csv
-  text_column: text         # change to your text column name
-  label_column: label       # change to your label column name
-  # Optional: map raw labels to canonical 6-class set
-  # Example if your dataset uses "joy" instead of "happy".
-  label_mapping:
-    joy: happy
-    anger: angry
-    sadness: sad
-    happiness: happy
-    surprise: surprise
-    disgust: disgust
-    fear: fear
-  # Allowed labels (final target set). Adjust to match your dataset exactly
-  labels: [angry, disgust, fear, happy, sad, surprise]
-  val_size: 0.1             # used only if single CSV is provided
-  shuffle_before_split: true
-
-# Model and training configuration (TEXT)
-model:
-  pretrained_checkpoint: distilbert-base-uncased
-  max_length: 160
-
-training:
-  num_train_epochs: 3
-  per_device_train_batch_size: 16
-  per_device_eval_batch_size: 32
-  learning_rate: 5e-5
-  weight_decay: 0.01
-  warmup_ratio: 0.06
-  lr_scheduler_type: linear
-  gradient_accumulation_steps: 1
-  evaluation_strategy: epoch
-  save_strategy: epoch
-  logging_steps: 50
-  load_best_model_at_end: true
-  metric_for_best_model: f1_macro
-  greater_is_better: true
-  fp16: false  # set true if you have compatible GPU
-
-# Image dataset configuration (CNN)
+# Image dataset configuration (CNN only)
 dataset_image:
   # Option A: provide a single root folder with class subfolders; script will split into train/val
   # Example structure:
@@ -72,7 +22,7 @@ dataset_image:
   val_size: 0.1
   shuffle_before_split: true
 
-# Image model and training configuration (CNN)
+# Image model and training configuration (CNN only)
 model_image:
   backbone: resnet18    # resnet18 | resnet34 | small
   pretrained: true      # use ImageNet weights (recommended)

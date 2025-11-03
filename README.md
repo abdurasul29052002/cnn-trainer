@@ -1,18 +1,16 @@
-### Emotion Detection (6-class) — Training and API Serving
+### Emotion Detection from Images (CNN)
 
-This project fine-tunes a lightweight Transformer (DistilBERT) to detect 6 basic emotions in text:
+This project trains a CNN image classifier to detect 6 basic facial emotions:
 - angry, disgust, fear, happy, sad, surprise
 
-It includes:
-- A configurable training pipeline (`train.py`, `config.yaml`)
-- A FastAPI service (`app/main.py`) exposing `/predict` and `/health`
+It includes a simple, configurable training pipeline for images only:
+- `train_image_cnn.py` — end-to-end training script (ResNet18 by default, or a small custom CNN)
+- `config.yaml` — configure dataset paths, model, and training hyperparameters
 - Evaluation artifacts (classification report + confusion matrix)
-
 
 #### 1) Setup
 
-1. Create and activate a virtual environment
-- Windows PowerShell:
+1. Create and activate a virtual environment (Windows PowerShell):
 ```
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -23,93 +21,51 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+#### 2) Prepare your dataset (ImageFolder)
 
-#### 2) Prepare your dataset
-
-- Default expects a single CSV at `data\dataset.csv` with columns:
-  - `text` — the input sentence/document
-  - `label` — one of: `angry, disgust, fear, happy, sad, surprise`
-- If your dataset uses different names (e.g., `content` and `emotion`) or labels (e.g., `joy` for `happy`), edit `config.yaml`:
-  - `dataset.text_column` and `dataset.label_column`
-  - `dataset.label_mapping` to normalize labels (e.g., `joy: happy`)
-  - `dataset.labels` to set the final 6 classes (order defines ids)
-- Alternatively, provide separate train/val CSV files using `dataset.train_path` and `dataset.val_path`.
-
-Example of minimal CSV format:
+Option A — single root folder (auto split by `val_size`):
 ```
-text,label
-I am so happy today!,happy
-This is terrible and makes me angry.,angry
+data\images\angry\*.jpg
+data\images\disgust\*.jpg
+data\images\fear\*.jpg
+data\images\happy\*.jpg
+data\images\sad\*.jpg
+data\images\surprise\*.jpg
 ```
 
+Option B — separate folders for train/val:
+```
+data\images_train\<class>\*.jpg
+data\images_val\<class>\*.jpg
+```
+Set these in `config.yaml` under `dataset_image`.
 
 #### 3) Configure training (config.yaml)
 
 Key fields:
-- `project.output_dir`: where the fine-tuned model is saved (default `models\emotion-distilbert`)
-- `dataset.*`: paths, columns, labels, and optional mapping
-- `model.pretrained_checkpoint`: base model name (default `distilbert-base-uncased`)
-- `training.*`: epochs, batch sizes, learning rate, etc.
-
+- `project.output_dir`: where the trained model is saved (default `models\emotion-cnn`)
+- `dataset_image.root_dir` or (`train_dir`, `val_dir`)
+- `dataset_image.labels`: enforced label order (optional; defaults to folder alphabetical order)
+- `model_image.backbone`: `resnet18` | `resnet34` | `small`
+- `model_image.image_size`: default 96 (images are resized)
+- `model_image.grayscale`: set `true` if your images are grayscale
+- `training_image.*`: epochs, batch sizes, learning rate, workers
 
 #### 4) Train
 ```
-python train.py
+python train_image_cnn.py
 ```
 Outputs:
-- Model + tokenizer at `models\emotion-distilbert\`
-- Reports at `outputs\reports\`:
-  - `classification_report.txt`
-  - `confusion_matrix.csv`
+- Best model checkpoint: `models\emotion-cnn\cnn_image_best.pt`
+- Reports in `outputs\reports\`:
+  - `classification_report_image.txt`
+  - `confusion_matrix_image.csv`
 
+#### 5) Tips
+- GPU: Script auto-selects CUDA if available.
+- Grayscale images: set `model_image.grayscale: true` (pipeline expands to 3 channels for pretrained CNNs).
+- Class imbalance: You can try class-balanced sampling or loss weighting.
 
-#### 5) Serve the API
-
-1) Ensure the environment variable (optional) or config points to the trained model
-- Option A (env var):
-```
-$env:EMOTION_MODEL_DIR = "models\emotion-distilbert"
-```
-- Option B: Make sure `project.output_dir` in `config.yaml` is set to the same path
-
-2) Start the API
-```
-uvicorn app.main:app --reload --port 8000
-```
-
-3) Check health
-```
-curl http://127.0.0.1:8000/health
-```
-
-4) Predict (single or batch)
-```
-curl -X POST http://127.0.0.1:8000/predict ^
-  -H "Content-Type: application/json" ^
-  -d "{\"texts\":[\"I am proud and happy today!\"],\"top_k\":3}"
-```
-Response example:
-```
-{
-  "results": [
-    {"top": [
-      {"label": "happy", "score": 0.83},
-      {"label": "surprise", "score": 0.10},
-      {"label": "sad", "score": 0.03}
-    ]}
-  ],
-  "labels": ["angry", "disgust", "fear", "happy", "sad", "surprise"]
-}
-```
-
-
-#### 6) Tips
-- GPU: If you have an NVIDIA GPU, set `training.fp16: true` in `config.yaml` for faster training.
-- Max length: Increase `model.max_length` if your texts are long (will use more memory).
-- Class imbalance: You can explore weighted loss or data augmentation if needed.
-
-
-#### 7) Troubleshooting
-- "Model directory not found": Train first (`python train.py`), or set `EMOTION_MODEL_DIR` to a directory with a HF model.
-- Import errors: Make sure the virtual environment is active and `pip install -r requirements.txt` completed successfully.
-- CSV encoding: If reading fails, try saving your CSV as UTF-8 or pass `encoding='utf-8'` in your own loader if you customize `train.py`.
+#### 6) Troubleshooting
+- "Provide either train_dir/val_dir or root_dir": Check `dataset_image` paths in `config.yaml`.
+- Import errors: ensure virtual environment is active and `pip install -r requirements.txt` completed successfully.

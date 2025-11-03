@@ -1,0 +1,1 @@
+images papkasiga kerakli malumotlar saqlanadi

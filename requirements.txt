@@ -4,6 +4,7 @@ uvicorn[standard]==0.30.6
 pydantic==2.12.3
 transformers==4.40.2
 torch==2.3.1
+torchvision==0.18.1
 accelerate==0.31.0
 scikit-learn==1.4.2
 datasets==2.19.0

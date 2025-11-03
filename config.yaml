@@ -6,7 +6,7 @@ project:
   logs_dir: outputs\logs
   reports_dir: outputs\reports
 
-# Dataset configuration
+# Dataset configuration (TEXT)
 # If you have separate train/val CSV files, you can set dataset.train_path and dataset.val_path
 # Otherwise set dataset.path and split will be created automatically
 # Columns are configurable to match your Kaggle dataset
@@ -34,7 +34,7 @@ dataset:
   val_size: 0.1             # used only if single CSV is provided
   shuffle_before_split: true
 
-# Model and training configuration
+# Model and training configuration (TEXT)
 model:
   pretrained_checkpoint: distilbert-base-uncased
   max_length: 160
@@ -55,3 +55,34 @@ training:
   metric_for_best_model: f1_macro
   greater_is_better: true
   fp16: false  # set true if you have compatible GPU
+
+# Image dataset configuration (CNN)
+dataset_image:
+  # Option A: provide a single root folder with class subfolders; script will split into train/val
+  # Example structure:
+  #   data\images\angry\...jpg
+  #   data\images\happy\...jpg
+  #   ...
+  root_dir: data\images
+  # Option B: provide separate train/val folders (overrides root_dir if both set)
+  # train_dir: data\images_train
+  # val_dir: data\images_val
+  # Optional: enforce a specific label order; otherwise folders' alphabetical order is used
+  labels: [angry, disgust, fear, happy, sad, surprise]
+  val_size: 0.1
+  shuffle_before_split: true
+
+# Image model and training configuration (CNN)
+model_image:
+  backbone: resnet18    # resnet18 | resnet34 | small
+  pretrained: true      # use ImageNet weights (recommended)
+  image_size: 96        # will be resized to this
+  grayscale: false      # set true if your images are grayscale
+
+training_image:
+  epochs: 15
+  train_batch_size: 64
+  eval_batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  num_workers: 4

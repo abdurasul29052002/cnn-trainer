@@ -18,7 +18,7 @@ dataset_image:
   # train_dir: data\images_train
   # val_dir: data\images_val
   # Optional: enforce a specific label order; otherwise folders' alphabetical order is used
-  labels: [angry, disgust, fear, happy, sad, surprise]
+  labels: [angry, disgust, fear, happy, neutral, sad, surprise]
   val_size: 0.1
   shuffle_before_split: true
 

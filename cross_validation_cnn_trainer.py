@@ -1,7 +1,6 @@
 import os
 import random
 from dataclasses import dataclass
-from ftplib import print_line
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
@@ -233,7 +232,7 @@ def main():
     num_classes = len(classes)
 
     labels = np.array([y for _, y in full_ds.imgs])
-    kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=cfg.seed)
+    kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=cfg.seed)
 
     fold_accuracies = []
 

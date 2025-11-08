@@ -1,3 +1,4 @@
+tqdm
 # Minimal dependencies for CNN image classification (Python 3.12 on Windows)
 torch==2.3.1
 torchvision==0.18.1
